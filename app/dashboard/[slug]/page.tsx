@@ -1,12 +1,13 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
-export default function Dashboard({ params }: { params: { slug: string } }) {
+export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const params = useParams(); // ✅ Use `useParams()` instead of `params` prop
   const [organization, setOrganization] = useState<string | null>(null);
 
   useEffect(() => {
@@ -16,6 +17,7 @@ export default function Dashboard({ params }: { params: { slug: string } }) {
     }
 
     const fetchOrganization = async () => {
+      if (!params.slug) return; // Prevent fetching if slug is missing
       const res = await fetch(`/api/organization/${params.slug}`);
       const data = await res.json();
       if (data.name) {
@@ -25,9 +27,7 @@ export default function Dashboard({ params }: { params: { slug: string } }) {
       }
     };
 
-    if (params.slug) {
-      fetchOrganization();
-    }
+    fetchOrganization();
   }, [status, params.slug, router]);
 
   if (status === "loading") return <p>Loading...</p>;

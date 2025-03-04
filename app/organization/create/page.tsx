@@ -1,46 +1,77 @@
 "use client";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { toast } from "sonner";
+
+// Zod Schema for validation
+const organizationSchema = z.object({
+  name: z
+    .string()
+    .min(3, "Organization name must be at least 3 characters long")
+    .max(50, "Organization name must be under 50 characters"),
+});
 
 export default function CreateOrganization() {
   const { data: session } = useSession();
   const router = useRouter();
-  const [name, setName] = useState("");
   const [error, setError] = useState("");
 
-  const handleCreate = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!session?.user?.id) return setError("Not authenticated");
+  // React Hook Form with Zod Validation
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    resolver: zodResolver(organizationSchema),
+  });
+
+  const handleCreate = async (data: { name: string }) => {
+    if (!session?.user?.id) {
+      setError("Not authenticated");
+      return;
+    }
 
     const response = await fetch("/api/organization", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, userId: session.user.id }),
+      body: JSON.stringify({ name: data.name, userId: session.user.id }),
     });
 
-    const data = await response.json();
+    const resData = await response.json();
     if (response.ok) {
-      router.push(`/dashboard/${data.slug}`);
+      toast.success("Organization created successfully!");
+      router.push(`/dashboard/${resData.slug}`);
     } else {
-      setError(data.error || "Could not create organization");
+      setError(resData.error || "Could not create organization");
     }
   };
 
   return (
-    <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow">
-      <h2 className="text-xl font-bold mb-4">Create Organization</h2>
-      <form onSubmit={handleCreate} className="space-y-4">
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Organization Name"
-          className="input"
-          required
-        />
-        {error && <p className="text-red-500">{error}</p>}
-        <button type="submit" className="btn-primary">Create</button>
-      </form>
-    </div>
+    <Card className="max-w-md mx-auto p-6">
+      <CardHeader>
+        <CardTitle className="text-xl font-bold">Create Organization</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit(handleCreate)} className="space-y-4">
+          <div>
+            <label className="text-sm font-medium">Organization Name</label>
+            <Input {...register("name")} placeholder="Enter name" />
+            {errors.name && <p className="text-red-500 text-sm">{errors.name.message}</p>}
+          </div>
+          {error && <p className="text-red-500">{error}</p>}
+          <Button type="submit" disabled={isSubmitting} className="w-full">
+            {isSubmitting ? "Creating..." : "Create Organization"}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
