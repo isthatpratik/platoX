@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import crypto from "crypto";
+import { sendVerificationEmail } from "@/lib/mailer";
 
 const prisma = new PrismaClient();
 
 export async function POST(req: Request) {
   try {
-    const { name, email, password, role } = await req.json();
+    const { email, password, checkOnly } = await req.json();
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -14,16 +16,28 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "User already exists" }, { status: 400 });
     }
 
+    // If only checking email, return early
+    if (checkOnly) {
+      return NextResponse.json({ exists: false }, { status: 200 });
+    }
+
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
-    const newUser = await prisma.user.create({
-      data: { name, email, password: hashedPassword, role },
+    // Generate a 6-digit verification code
+    const verificationCode = crypto.randomInt(100000, 999999).toString();
+
+    // Store user as unverified
+    await prisma.user.create({
+      data: { email, password: hashedPassword, verified: false, verificationCode, role: "user" },
     });
 
-    return NextResponse.json(newUser, { status: 201 });
-  } catch (error) {
-    return NextResponse.json({ error: "Something went wrong" }, { status: 500 });
+    // Send verification email
+    await sendVerificationEmail(email, verificationCode);
+
+    return NextResponse.json({ message: "Verification code sent" }, { status: 201 });
+  } catch (error: any) {
+    console.error("Signup Error:", error);
+    return NextResponse.json({ error: error.message || "Something went wrong" }, { status: 500 });
   }
 }

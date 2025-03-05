@@ -1,13 +1,14 @@
 "use client";
 
-import { useSession } from "next-auth/react";
+import { useSession, signOut } from "next-auth/react";
 import { useRouter, useParams } from "next/navigation";
 import { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
   const { data: session, status } = useSession();
   const router = useRouter();
-  const params = useParams(); // ✅ Use `useParams()` instead of `params` prop
+  const params = useParams();
   const [organization, setOrganization] = useState<string | null>(null);
 
   useEffect(() => {
@@ -17,13 +18,18 @@ export default function Dashboard() {
     }
 
     const fetchOrganization = async () => {
-      if (!params.slug) return; // Prevent fetching if slug is missing
-      const res = await fetch(`/api/organization/${params.slug}`);
-      const data = await res.json();
-      if (data.name) {
-        setOrganization(data.name);
-      } else {
-        router.push("/organization/create"); // Redirect if invalid slug
+      if (!params.slug) return;
+      try {
+        const res = await fetch(`/api/organization/${params.slug}`);
+        const data = await res.json();
+        if (data.name) {
+          setOrganization(data.name);
+        } else {
+          router.push("/organization/create");
+        }
+      } catch (error) {
+        console.error("Failed to fetch organization:", error);
+        router.push("/organization/create");
       }
     };
 
@@ -33,8 +39,19 @@ export default function Dashboard() {
   if (status === "loading") return <p>Loading...</p>;
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold">{organization ? `Welcome to ${organization}` : "Loading..."}</h1>
+    <div className="p-6 flex flex-col items-center">
+      <h1 className="text-2xl font-bold">
+        {organization ? `Welcome to ${organization}` : "Loading..."}
+      </h1>
+      <p className="mt-2 text-gray-500">Logged in as {session?.user?.email}</p>
+      
+      {/* 🔹 Logout Button */}
+      <Button 
+        className="mt-4" 
+        onClick={() => signOut({ callbackUrl: "/auth/login" })}
+      >
+        Logout
+      </Button>
     </div>
   );
 }
