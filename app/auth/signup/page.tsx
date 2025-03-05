@@ -7,11 +7,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
 
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import {
   Form,
   FormField,
@@ -20,31 +20,22 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 
-import { Eye, EyeOff } from "lucide-react"; // Import eye icons
+import { Eye, EyeOff, CheckCircle, XCircle } from "lucide-react";
 
-// List of common personal email providers
 const personalEmailDomains = [
   "gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "aol.com",
   "icloud.com", "protonmail.com", "zoho.com", "gmx.com", "mail.com",
 ];
-
-// Regex to detect disposable email domains
 const disposableEmailPattern = /(tempmail|10minutemail|guerrillamail|mailinator|yopmail|fakemail|trashmail|maildrop|sharklasers|mailnesia|getnada|mytemp|throwawaymail)/i;
 
-// Zod validation schema
+// Zod Validation Schema
 const SignupSchema = z.object({
   email: z.string().email({ message: "Invalid email format" }).refine((email) => {
     const domain = email.split("@")[1];
     return domain && !personalEmailDomains.includes(domain) && !disposableEmailPattern.test(domain);
-  }, { message: "Use a valid company email (No personal/disposable emails allowed)" }),
+  }, { message: "Use a company email (No personal/disposable emails)" }),
 
-  password: z.string()
-    .min(8, "At least 8 characters")
-    .regex(/[A-Z]/, "Must contain an uppercase letter")
-    .regex(/[a-z]/, "Must contain a lowercase letter")
-    .regex(/[0-9]/, "Must contain a number")
-    .regex(/[\W_]/, "Must contain a special character"),
-
+  password: z.string().min(8, "At least 8 characters"),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords must match",
@@ -61,13 +52,13 @@ export default function Signup() {
   const [loading, setLoading] = useState(false);
   const [emailError, setEmailError] = useState("");
   const [passwordStrength, setPasswordStrength] = useState(0);
-  const [showPassword, setShowPassword] = useState(false); // 🔹 Toggle password visibility
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false); // 🔹 Toggle confirm password visibility
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isTypingPassword, setIsTypingPassword] = useState(false);
 
   const email = form.watch("email");
   const password = form.watch("password");
 
-  // Validate email on blur
   const validateEmail = async () => {
     if (!email) return;
 
@@ -80,30 +71,26 @@ export default function Signup() {
         setEmailError("");
       }
     } catch (error) {
-      if (axios.isAxiosError(error) && error.response?.data?.error) {
-        setEmailError(error.response.data.error);
-      } else {
-        setEmailError("Something went wrong");
-      }
+      setEmailError("Something went wrong");
     }
   };
 
-  // Password strength calculation
   useEffect(() => {
-    if (!password) {
-      setPasswordStrength(0);
-      return;
-    }
-
     let strength = 0;
-    if (password.length >= 8) strength += 25;
-    if (/[A-Z]/.test(password)) strength += 25;
+    if (password.length >= 8) strength += 20;
+    if (/[A-Z]/.test(password)) strength += 20;
     if (/[a-z]/.test(password)) strength += 15;
-    if (/[0-9]/.test(password)) strength += 15;
-    if (/[\W_]/.test(password)) strength += 20;
+    if (/[0-9]/.test(password)) strength += 20;
+    if (/[\W_]/.test(password)) strength += 25;
 
     setPasswordStrength(strength);
   }, [password]);
+
+  const getStrengthColor = () => {
+    if (passwordStrength < 40) return "bg-yellow-400";  // Weak (Yellow)
+    if (passwordStrength < 70) return "bg-green-400";   // Moderate (Light Green)
+    return "bg-green-600";  // Strong (Dark Green)
+  };
 
   const onSubmit = async (data: any) => {
     setLoading(true);
@@ -124,7 +111,7 @@ export default function Signup() {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 mt-4">
-
+            
             {/* Email Field */}
             <FormField
               control={form.control}
@@ -135,13 +122,26 @@ export default function Signup() {
                   <FormControl>
                     <Input {...field} type="email" placeholder="Enter company email" onBlur={validateEmail} />
                   </FormControl>
-                  {emailError && <p className="text-red-500 text-sm">{emailError}</p>}
+
+                  <AnimatePresence>
+                    {emailError && (
+                      <motion.p 
+                        className="text-red-500 text-sm mt-1"
+                        initial={{ opacity: 0, y: -5 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -5 }}
+                      >
+                        {emailError}
+                      </motion.p>
+                    )}
+                  </AnimatePresence>
+
                   <FormMessage />
                 </FormItem>
               )}
             />
 
-            {/* Password Field with Show/Hide Toggle */}
+            {/* Password Field */}
             <FormField
               control={form.control}
               name="password"
@@ -150,66 +150,65 @@ export default function Signup() {
                   <Label>Password</Label>
                   <div className="relative">
                     <FormControl>
-                      <Input {...field} type={showPassword ? "text" : "password"} placeholder="Enter password" />
+                      <Input 
+                        {...field} 
+                        type={showPassword ? "text" : "password"} 
+                        placeholder="Enter password" 
+                        onFocus={() => setIsTypingPassword(true)} 
+                        onChange={(e) => {
+                          field.onChange(e);
+                          setIsTypingPassword(e.target.value.length > 0);
+                        }}
+                      />
                     </FormControl>
-                    {/* Toggle Button */}
-                    <button
-                      type="button"
-                      className="absolute right-3 top-2.5 text-gray-500 hover:text-gray-700"
-                      onClick={() => setShowPassword((prev) => !prev)}
-                    >
+                    <button type="button" className="absolute right-3 top-2.5 text-gray-500" onClick={() => setShowPassword(!showPassword)}>
                       {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
                   </div>
 
-                  {/* Password Strength Progress Bar */}
-                  {password && (
-                    <Progress
-                      value={passwordStrength}
-                      className={`h-1 mt-1 ${
-                        passwordStrength < 50 ? "bg-red-500" : 
-                        passwordStrength < 75 ? "bg-yellow-500" : 
-                        passwordStrength < 100 ? "bg-green-500" : 
-                        "bg-green-700"
-                      }`}
-                    />
-                  )}
-                  <FormMessage />
+                  <AnimatePresence>
+                    {isTypingPassword && (
+                      <>
+                        {/* Password Strength Bar */}
+                        <motion.div
+                          className="mt-2 w-full bg-gray-200 rounded h-2 overflow-hidden"
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "8px" }}
+                          exit={{ opacity: 0, height: 0 }}
+                        >
+                          <div className={`h-full transition-all duration-300 ${getStrengthColor()}`} style={{ width: `${passwordStrength}%` }} />
+                        </motion.div>
+
+                        {/* Password Hints */}
+                        <motion.div
+                          className="mt-2 space-y-1 text-sm"
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                        >
+                          {[
+                            { label: "At least 8 characters", regex: /.{8,}/ },
+                            { label: "Uppercase letter", regex: /[A-Z]/ },
+                            { label: "Number", regex: /[0-9]/ },
+                            { label: "Special character", regex: /[\W_]/ },
+                          ].map(({ label, regex }) => (
+                            <div key={label} className="flex items-center gap-2">
+                              {regex.test(password) ? <CheckCircle className="text-green-500" size={14} /> : <XCircle className="text-red-500" size={14} />}
+                              <span>{label}</span>
+                            </div>
+                          ))}
+                        </motion.div>
+                      </>
+                    )}
+                  </AnimatePresence>
                 </FormItem>
               )}
             />
 
-            {/* Confirm Password Field with Show/Hide Toggle */}
-            <FormField
-              control={form.control}
-              name="confirmPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <Label>Confirm Password</Label>
-                  <div className="relative">
-                    <FormControl>
-                      <Input {...field} type={showConfirmPassword ? "text" : "password"} placeholder="Confirm password" />
-                    </FormControl>
-                    {/* Toggle Button */}
-                    <button
-                      type="button"
-                      className="absolute right-3 top-2.5 text-gray-500 hover:text-gray-700"
-                      onClick={() => setShowConfirmPassword((prev) => !prev)}
-                    >
-                      {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <Button type="submit" disabled={loading} className="w-full">
-              {loading ? "Signing up..." : "Signup"}
-            </Button>
+            <Button type="submit" disabled={loading} className="w-full">{loading ? "Signing up..." : "Signup"}</Button>
           </form>
         </Form>
       </div>
     </div>
-  )
+  );
 }
